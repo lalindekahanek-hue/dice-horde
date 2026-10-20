@@ -269,8 +269,9 @@ button{font:inherit; color:inherit}
   position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
   background:rgba(3,8,13,.7); backdrop-filter:blur(8px); opacity:0; visibility:hidden;
   transition:opacity .2s,visibility .2s; padding:20px; overflow-y:auto;
+  pointer-events:none;
 }
-.overlay.show{opacity:1; visibility:visible}
+.overlay.show{opacity:1; visibility:visible; pointer-events:auto}
 .title-card{width:min(780px,94vw); text-align:center; padding:16px 0}
 .kicker{font-size:10px; letter-spacing:.38em; color:var(--mint); margin:0 0 12px}
 .title-card h1{
