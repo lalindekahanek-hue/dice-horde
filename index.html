@@ -186,6 +186,17 @@ input[type=range]{touch-action:manipulation}
   box-shadow:0 8px 24px rgba(0,0,0,.2);
 }
 .weapon-card::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--wc,var(--gold)); opacity:.8}
+.face-weapon-block{display:flex; flex-direction:column; gap:3px}
+.face-weapon-label{display:flex; align-items:center; gap:5px; color:var(--mint); font-size:8px; letter-spacing:.08em}
+.face-weapon-label b{color:#07221f; background:var(--mint); border-radius:4px; padding:2px 5px; letter-spacing:.12em}
+.face-weapon-label span{color:var(--dim); letter-spacing:0}
+.face-weapon-card{
+  position:relative; overflow:hidden; padding:6px 8px 6px 10px;
+  border:1px dashed rgba(115,230,199,.42); border-radius:10px;
+  background:linear-gradient(130deg,rgba(12,43,42,.92),rgba(5,23,25,.94));
+}
+.face-weapon-card::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--mint)}
+.face-weapon-time{margin-left:auto; color:var(--mint); font-size:8px; font-variant-numeric:tabular-nums}
 .weapon-head{display:flex; align-items:center; gap:7px; margin-bottom:6px}
 .weapon-name{font-size:12px; font-weight:800; letter-spacing:.03em; color:#f0faf5}
 .weapon-form{font-size:8px; color:var(--wc,var(--gold)); border:1px solid color-mix(in srgb,var(--wc,var(--gold)) 35%,transparent); border-radius:4px; padding:2px 5px; letter-spacing:.08em}
@@ -782,7 +793,7 @@ input[type=range]{touch-action:manipulation}
 
 <div class="overlay show" id="titleOverlay">
   <div class="title-card">
-    <p class="kicker">无限网格 · 骰子割草 · 网页 v0.5.1 · 空格充能</p>
+    <p class="kicker">无限网格 · 骰子割草 · 网页 v0.5.2 · 空格充能</p>
     <h1>骰子滚兽</h1>
     <div class="en">DICE HORDE</div>
     <p class="tagline">顶面是倍率，方框是成长，<b>每一面都能赌</b>。</p>
@@ -1270,9 +1281,10 @@ function highestWeaponDamage() {
 }
 function spawnMachineWeapon(until) {
   if (!g) return;
-  const old = g.weapons.find(w => w.tempMachine);
+  const old = g.faceWeapons.find(w => w.tempMachine);
   if (old) {
     old.expireAt = Math.max(old.expireAt || 0, until);
+    renderWeaponPanel();
     return;
   }
   const dmg = Math.max(0, Math.ceil(highestWeaponDamage() / 10));
@@ -1293,7 +1305,7 @@ function spawnMachineWeapon(until) {
     radius:.1,
     heavy:false,
     desc:`临时机枪 · 伤害 ${dmg} · 0间隔按0.5s · 10连发`,
-    temporary:true,
+    faceWeapon:true,
     tempMachine:true,
     expireAt:until,
     cd:0,
@@ -1303,7 +1315,7 @@ function spawnMachineWeapon(until) {
     jammed:false,
     last:null,
   };
-  g.weapons.push(w);
+  g.faceWeapons.push(w);
   renderWeaponPanel();
 }
 function slotText(w) {
@@ -1475,6 +1487,7 @@ function createGame() {
     })),
     enemies:[], projectiles:[], gems:[], particles:[], texts:[], arcs:[], waves:[],
     weapons:[makeWeapon('base')],
+    faceWeapons:[],
     moveHistory:[],
     level:1, xp:0, xpNext:1, pending:0,
     rerolls:3,
@@ -1573,7 +1586,14 @@ function onTopFaceChanged(newFaceId) {
 function activateFaceCharge() {
   if (!g || state !== 'playing') return;
   const c = g.faceCharge;
-  if (!c || c.activeUntil > g.t || c.stacks <= 0) return;
+  if (!c || c.stacks <= 0) return;
+  if (c.activeUntil > g.t) {
+    // 技能期间再次按下：消耗一层，直接延长 3 秒。
+    c.stacks--;
+    c.activeUntil += 3;
+    updateChargeUI();
+    return;
+  }
   c.stacks--;
   c.progress = 0;
   c.activeUntil = g.t + 3;
@@ -3154,6 +3174,7 @@ function update(dt) {
   if (state !== 'playing') return;
   updateProjectiles(dt);
   updateWeapons(dt);
+  updateFaceWeapons(dt);
   updateGems(dt);
   updateParticles(dt);
   updateTexts(dt);
@@ -3179,10 +3200,30 @@ function idleAttackTarget(stillTime) {
 
 function updateWeapons(dt) {
   const rate = g.atkSpeed;
-  const before = g.weapons.length;
-  g.weapons = g.weapons.filter(w => !w.temporary || g.t < (w.expireAt || 0));
-  if (g.weapons.length !== before) renderWeaponPanel();
   for (const w of g.weapons) {
+    if (w.bursting) {
+      w.burstTimer -= dt * rate;
+      while (w.bursting && w.burstTimer <= 0) {
+        if (!weaponVolley(w)) { finishBurst(w); break; }
+        w.burstLeft--;
+        if (w.burstLeft <= 0) { finishBurst(w); break; }
+        w.burstTimer += .085;
+      }
+    } else {
+      w.cd -= dt * rate;
+      if (w.cd <= 0) beginBurst(w);
+    }
+  }
+}
+
+// 骰面武器是完全独立的临时武器：不占 3 把普通武器上限，不进入选卡/替换/附魔槽。
+function updateFaceWeapons(dt) {
+  if (!g.faceWeapons || !g.faceWeapons.length) return;
+  const rate = g.atkSpeed;
+  const before = g.faceWeapons.length;
+  g.faceWeapons = g.faceWeapons.filter(w => g.t < (w.expireAt || 0));
+  if (g.faceWeapons.length !== before) renderWeaponPanel();
+  for (const w of g.faceWeapons) {
     if (w.bursting) {
       w.burstTimer -= dt * rate;
       while (w.bursting && w.burstTimer <= 0) {
@@ -3511,11 +3552,7 @@ function slotFramesHTML(w) {
 
 function renderWeaponPanel() {
   if (!g) return;
-  if (!g.weapons.length) {
-    ui.weaponPanel.innerHTML = '<div class="weapon-empty">没有武器</div>';
-    return;
-  }
-  ui.weaponPanel.innerHTML = g.weapons.map(w => {
+  const normalHTML = g.weapons.map(w => {
     const last = w.last
       ? `本发 ${w.last.damage}${w.last.pellets > 1 ? ` ×${w.last.pellets}` : ''} · 穿${w.last.hits}${w.last.burst > 1 ? ` · ${w.last.burst}连` : ''}`
       : w.desc;
@@ -3536,6 +3573,21 @@ function renderWeaponPanel() {
       <div class="weapon-slots"><span class="slot-label">附魔槽</span>${slotFramesHTML(w)}</div>
     </div>`;
   }).join('');
+  const faceHTML = (g.faceWeapons || []).map(w => `
+    <div class="face-weapon-block">
+      <div class="face-weapon-label"><b>骰面武器</b><span>临时 · 不占武器上限</span></div>
+      <div class="face-weapon-card" style="--wc:${w.color}">
+        <div class="weapon-head">
+          <span class="weapon-name">${w.name}</span>
+        </div>
+        <div class="weapon-stats">
+          ${weaponStatHTML('伤害', w.damage)}
+          ${intervalStatHTML(w)}
+          ${weaponStatHTML('连发', w.burst)}
+        </div>
+      </div>
+    </div>`).join('');
+  ui.weaponPanel.innerHTML = (normalHTML + faceHTML) || '<div class="weapon-empty">没有武器</div>';
 }
 
 /* ----------------------------- 横幅/提示 ----------------------------- */
@@ -4615,6 +4667,12 @@ if (params.has('debug')) {
       slots:w.slots.map(s => s ? s.type : null),
       damageValue:fieldVector(w.damage), intervalValue:fieldVector(w.interval),
       pelletsValue:fieldVector(w.pellets), pierceValue:fieldVector(w.pierce), burstValue:fieldVector(w.burst),
+    })),
+    faceWeapons: () => (g.faceWeapons || []).map(w => ({
+      id:w.id, name:w.name,
+      damage:fieldString(w.damage), interval:fieldString(w.interval),
+      pellets:fieldString(w.pellets), pierce:fieldString(w.pierce), burst:fieldString(w.burst),
+      expireAt:w.expireAt, last:w.last,
     })),
     activeFace: () => ({ id:g.player.activeFaceId, value:activeFace().value, enchant:{...activeFace().enchant} }),
     openTargets: () => ({ card:targetCard, kind:targetKind }),
