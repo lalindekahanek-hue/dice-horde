@@ -350,7 +350,7 @@ input[type=range]{touch-action:manipulation}
   position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
   background:rgba(3,8,13,.7); backdrop-filter:blur(8px); opacity:0; visibility:hidden;
   transition:opacity .2s,visibility .2s; padding:20px; overflow-y:auto;
-  pointer-events:none; touch-action:pan-y; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+  pointer-events:none; touch-action:none; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
 }
 .overlay.show{opacity:1; visibility:visible; pointer-events:auto}
 .title-card{width:min(780px,94vw); text-align:center; padding:16px 0}
@@ -796,7 +796,7 @@ input[type=range]{touch-action:manipulation}
 
 <div class="overlay show" id="titleOverlay">
   <div class="title-card">
-    <p class="kicker">无限网格 · 骰子割草 · 网页 v0.5.3 · 空格充能</p>
+    <p class="kicker">无限网格 · 骰子割草 · 网页 v0.5.4 · 空格充能</p>
     <h1>骰子滚兽</h1>
     <div class="en">DICE HORDE</div>
     <p class="tagline">顶面是倍率，方框是成长，<b>每一面都能赌</b>。</p>
@@ -1459,6 +1459,7 @@ let keys = new Set();
 let mobileDir = null;
 let touchRepeat = null;
 let joystickPointer = null;
+let joystickTouchId = null;
 const UI_PREF_KEY = 'diceHordeUiPrefs_v1';
 let uiPrefs = {
   scheme:'pad',
@@ -2776,11 +2777,12 @@ function slotTargetHTML(wi, w) {
   let html = `<div class="weapon-target-row slot-target-row"><div class="weapon-target-name">${w.name}</div><div class="weapon-target-stats">`;
   w.slots.forEach((slot, si) => {
     const d = slot ? ENCHANT_DEFS[slot.type] : null;
-    const duplicate = type && w.slots.some((s, j) => j !== si && s && s.type === type);
+    const stackable = type === 'pierce' || type === 'spread';
+    const duplicate = !stackable && type && w.slots.some((s, j) => j !== si && s && s.type === type);
     const same = type && slot && slot.type === type;
     const disabled = duplicate || same;
     const label = duplicate ? '同属性' : same ? '已有' : d ? d.icon : '空槽';
-    html += `<button type="button" class="slot-target ${slot ? 'filled' : 'empty'} ${disabled ? 'disabled' : ''}" ${d ? `style="--sc:${d.color}"` : ''} ${disabled ? 'disabled' : ''} data-slot-target="${wi}" data-slot-index="${si}" title="${duplicate ? '同一武器不能重复附加相同属性' : same ? '这个槽已经是该属性' : '点击附魔'}">
+    html += `<button type="button" class="slot-target ${slot ? 'filled' : 'empty'} ${disabled ? 'disabled' : ''}" ${d ? `style="--sc:${d.color}"` : ''} ${disabled ? 'disabled' : ''} data-slot-target="${wi}" data-slot-index="${si}" title="${duplicate ? '同一武器不能重复附加相同属性' : same ? '这个槽已经是该属性' : stackable ? '穿透/散弹可叠在不同槽' : '点击附魔'}">
       ${label}
     </button>`;
   });
@@ -2905,7 +2907,7 @@ function renderTargetPicker() {
     } else {
       html += `<div class="target-note">当前没有带附魔槽的武器。</div>`;
     }
-    html += `</div><div class="target-note">双槽武器不能重复同一属性；已有附魔的槽可以替换，旧附魔消失。</div></div>`;
+    html += `</div><div class="target-note">穿透/散弹可叠在不同槽位；其他属性不能重复。已有附魔的槽可以替换，旧附魔消失。</div></div>`;
   } else {
     if (card.targetKind === 'all') {
       html += `<div class="target-section"><h3>骰面数字 · 每位可改</h3><div class="face-targets">${g.faces.map(faceDigitTargetHTML).join('')}</div>
@@ -3104,7 +3106,8 @@ function applySlotTarget(wi, si) {
   const w = g.weapons[wi];
   if (!w || !w.slots[si] && w.slots[si] !== null) return;
   if (si < 0 || si >= w.slots.length) return;
-  if (w.slots.some((s, j) => j !== si && s && s.type === card.enchant)) {
+  const stackable = card.enchant === 'pierce' || card.enchant === 'spread';
+  if (!stackable && w.slots.some((s, j) => j !== si && s && s.type === card.enchant)) {
     showToast('同一把武器不能重复附加相同属性');
     return;
   }
@@ -4340,6 +4343,7 @@ function stopMobileMovement() {
   mobileDir = null;
   if (touchRepeat) { clearInterval(touchRepeat); touchRepeat = null; }
   joystickPointer = null;
+  joystickTouchId = null;
   if (ui.joyKnob) ui.joyKnob.style.transform = 'translate(-50%,-50%)';
   if (ui.joystick) ui.joystick.classList.remove('show');
 }
@@ -4418,19 +4422,10 @@ function bindJoystick() {
       ui.joystick.classList.add('show');
     }
   };
-  const start = (e, prevent = true) => {
-    if (!g || joystickPointer !== null) return false;
-    if (prevent) e.preventDefault();
-    joystickPointer = e.pointerId;
-    showAt(e.clientX, e.clientY);
-    try { zone.setPointerCapture(e.pointerId); } catch {}
-    update(e);
-    return true;
-  };
-  const update = e => {
+  const updatePoint = (x, y) => {
     if (!g) return;
-    let dx = e.clientX - centerX;
-    let dy = e.clientY - centerY;
+    let dx = x - centerX;
+    let dy = y - centerY;
     const len = Math.hypot(dx, dy);
     const dead = SIZE * .16;
     const maxR = SIZE * .32;
@@ -4453,34 +4448,110 @@ function bindJoystick() {
       else tryRoll(dir[0], dir[1]);
     }
   };
+  const startPointer = (e, prevent = true) => {
+    if (!g || joystickPointer !== null || joystickTouchId !== null) return false;
+    if (prevent) e.preventDefault();
+    joystickPointer = e.pointerId;
+    showAt(e.clientX, e.clientY);
+    try { zone.setPointerCapture(e.pointerId); } catch {}
+    updatePoint(e.clientX, e.clientY);
+    return true;
+  };
+  const startTouch = (t, prevent = true) => {
+    if (!g || joystickPointer !== null || joystickTouchId !== null) return false;
+    if (prevent) t.preventDefault?.();
+    joystickTouchId = t.identifier;
+    showAt(t.clientX, t.clientY);
+    updatePoint(t.clientX, t.clientY);
+    return true;
+  };
+  let swallowClickTarget = null;
+  window.addEventListener('click', e => {
+    if (!swallowClickTarget) return;
+    if (e.target === swallowClickTarget || swallowClickTarget.contains(e.target)) {
+      e.preventDefault();
+      e.stopPropagation();
+      swallowClickTarget = null;
+    }
+  }, true);
   zone.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch') return;
     if (uiPrefs.scheme !== 'stick' || state !== 'playing') return;
-    start(e, true);
+    startPointer(e, true);
   });
   zone.addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch') return;
     if (uiPrefs.scheme !== 'stick' || joystickPointer !== e.pointerId) return;
     e.preventDefault();
-    update(e);
+    updatePoint(e.clientX, e.clientY);
   });
-  const end = e => {
+  const endPointer = e => {
     if (joystickPointer !== e.pointerId) return;
     joystickPointer = null;
     mobileDir = null;
     hide();
   };
-  zone.addEventListener('pointerup', end);
-  zone.addEventListener('pointercancel', end);
+  zone.addEventListener('pointerup', endPointer);
+  zone.addEventListener('pointercancel', endPointer);
   zone.addEventListener('contextmenu', e => e.preventDefault());
 
-  // 选卡/选目标遮罩打开时，左侧空白区域仍可起摇杆；
-  // 不拦截卡牌/按钮，右手可以同时选卡或点技能。
+  // 用独立的 Touch Events 跟踪摇杆手指，避免 pointer capture 干扰第二根手指。
+  window.addEventListener('touchstart', e => {
+    if (uiPrefs.scheme !== 'stick') return;
+    if (state !== 'playing' && state !== 'levelup') return;
+    // 摇杆手指按住时，第二根手指直接派发按钮/卡牌点击，
+    // 不依赖浏览器是否还能为第二根手指合成 click。
+    if (joystickPointer !== null || joystickTouchId !== null) {
+      const t2 = e.changedTouches[0];
+      if (!t2) return;
+      const hit2 = document.elementFromPoint(t2.clientX, t2.clientY);
+      const action = hit2 && hit2.closest('button,[data-card-index],[data-face-id],.face-chip');
+      if (action) {
+        e.preventDefault();
+        e.stopPropagation();
+        // 只拦截同一目标的补发 click；下一次主动点击不会被吞。
+        swallowClickTarget = null;
+        action.click();
+        swallowClickTarget = action;
+        setTimeout(() => { if (swallowClickTarget === action) swallowClickTarget = null; }, 350);
+      }
+      return;
+    }
+    const t = e.changedTouches[0];
+    if (!t) return;
+    if (t.clientX > window.innerWidth * .65) return;
+    const hit = document.elementFromPoint(t.clientX, t.clientY);
+    // 卡牌、按钮、输入控件永远优先；左空白区才起摇杆。
+    if (hit && hit.closest('button,input,textarea,select,.card,.text-btn,.face-target,.target-digit,.slot-target')) return;
+    startTouch(t, false);
+  }, { capture:true, passive:false });
+  window.addEventListener('touchmove', e => {
+    if (joystickTouchId === null) return;
+    const changed = [...e.changedTouches].some(t => t.identifier === joystickTouchId);
+    if (!changed) return;
+    const t = [...e.touches].find(t => t.identifier === joystickTouchId);
+    if (!t) return;
+    updatePoint(t.clientX, t.clientY);
+  }, { capture:true, passive:true });
+  const endTouch = e => {
+    if (joystickTouchId === null) return;
+    const ended = [...e.changedTouches].some(t => t.identifier === joystickTouchId);
+    if (!ended) return;
+    joystickTouchId = null;
+    mobileDir = null;
+    hide();
+  };
+  window.addEventListener('touchend', endTouch, true);
+  window.addEventListener('touchcancel', endTouch, true);
+
+  // 选卡/选目标遮罩打开时，左侧空白区域也允许鼠标/触控笔起摇杆。
   window.addEventListener('pointerdown', e => {
-    if (uiPrefs.scheme !== 'stick' || state !== 'levelup' || joystickPointer !== null) return;
-    if (e.pointerType === 'mouse') return;
+    if (e.pointerType === 'touch') return;
+    if (uiPrefs.scheme !== 'stick' || state !== 'levelup' || joystickPointer !== null || joystickTouchId !== null) return;
     if (e.clientX > window.innerWidth * .65) return;
     const hit = document.elementFromPoint(e.clientX, e.clientY);
     if (hit && hit.closest('button,input,textarea,select,.card,.text-btn,.face-target,.target-digit,.slot-target')) return;
-    start(e, true);
+    startPointer(e, true);
   }, true);
 }
 
