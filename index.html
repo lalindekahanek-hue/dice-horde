@@ -117,6 +117,7 @@ input[type=range]{touch-action:manipulation}
   border-radius:14px; background:linear-gradient(145deg,#ffe29a,#e4ad47);
   color:#241a0b; font-size:38px; line-height:1; font-weight:900;
   box-shadow:0 0 0 1px rgba(255,255,255,.35) inset,0 8px 24px rgba(255,190,80,.22);
+  cursor:pointer; pointer-events:auto;
   font-variant-numeric:tabular-nums;
 }
 .top-digit.multi{font-size:26px}
@@ -125,10 +126,18 @@ input[type=range]{touch-action:manipulation}
 .die-meta{min-width:0}
 .mult{font-size:25px; font-weight:900; color:var(--gold); line-height:1}
 .die-note{font-size:9px; color:var(--muted); margin-top:5px; line-height:1.5}
+.face-descline{
+  display:none; margin-top:6px; padding:4px 6px; border-radius:5px;
+  border-left:3px solid var(--fc,var(--mint)); background:rgba(115,230,199,.08);
+  color:#cfe8e2; font-size:7px; line-height:1.35; letter-spacing:.02em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.face-descline.show{display:block}
 .face-mini{display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin-top:12px}
 .face-chip{
   position:relative; min-height:39px; border-radius:8px; padding:4px 6px;
   background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); overflow:hidden;
+  cursor:pointer; pointer-events:auto;
 }
 .face-chip::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--fc)}
 .face-chip.top{border-color:rgba(255,209,102,.72); background:rgba(255,209,102,.12)}
@@ -231,6 +240,27 @@ input[type=range]{touch-action:manipulation}
 .joy-base::before,.joy-base::after{content:""; position:absolute; background:rgba(157,228,218,.12)}
 .joy-base::before{left:50%; top:14%; bottom:14%; width:1px}
 .joy-base::after{top:50%; left:14%; right:14%; height:1px}
+.charge-btn{
+  display:none; position:absolute; right:10px; top:52%; transform:translateY(-50%);
+  width:52px; height:52px; padding:0; border:0; border-radius:50%;
+  background:rgba(5,15,22,.58); color:var(--mint); cursor:pointer;
+  pointer-events:auto; z-index:8; place-items:center;
+  box-shadow:0 8px 22px rgba(0,0,0,.28); opacity:.82;
+}
+.charge-btn::before{
+  content:""; position:absolute; inset:-2px; border-radius:50%;
+  background:conic-gradient(from -90deg, var(--charge-color,var(--mint)) calc(var(--charge,.0) * 360deg), rgba(255,255,255,.13) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));
+  pointer-events:none;
+}
+.charge-core{position:relative; z-index:1; font-size:15px; font-weight:900; letter-spacing:0; color:#dffbf1; text-shadow:0 0 8px rgba(115,230,199,.35)}
+.charge-pips{position:absolute; left:50%; bottom:-8px; transform:translateX(-50%); display:flex; gap:3px; z-index:2}
+.charge-pips i{display:block; width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.18)}
+.charge-pips i.full{background:var(--mint); border-color:var(--mint); box-shadow:0 0 5px rgba(115,230,199,.6)}
+.charge-btn.active{opacity:1; color:var(--gold); --charge-color:var(--gold)}
+.charge-btn.active .charge-core{color:var(--gold); font-size:12px}
+.charge-btn.empty{opacity:.5}
 .joy-knob{
   position:absolute; left:50%; top:50%; width:42px; height:42px; border-radius:50%;
   transform:translate(-50%,-50%);
@@ -449,6 +479,7 @@ input[type=range]{touch-action:manipulation}
 
 @media (max-width:820px), (pointer:coarse){
   .mobile-ui-btn{display:inline-block}
+  .charge-btn{display:grid}
   .hud-top{padding:11px 11px 0; gap:7px; grid-template-columns:minmax(0,1fr) auto auto}
   .top-actions{flex-direction:column; align-items:flex-end; gap:3px}
   .top-actions .ghost-btn{font-size:8px; padding:5px 7px}
@@ -572,7 +603,10 @@ input[type=range]{touch-action:manipulation}
   .weapon-name{font-size:9px}
   .weapon-stats{font-size:7px}
   .touch-pad{left:50%; right:auto; bottom:calc(7px + env(safe-area-inset-bottom)); width:122px; height:122px; transform:translateX(-50%)}
-  .joy-zone{width:44%; height:66%}
+  .joy-zone{width:65%; height:100%}
+  .charge-btn{right:calc(8px + env(safe-area-inset-right)); top:52%; width:48px; height:48px}
+  .face-descline{font-size:6.5px; margin-top:4px; padding:3px 4px}
+  .face-descline.show{max-height:24px}
   .help{display:none}
   .ui-settings{top:36px; right:6px; max-height:calc(100vh - 44px); overflow-y:auto}
 
@@ -669,6 +703,7 @@ input[type=range]{touch-action:manipulation}
         <div class="die-note" id="topNote">所有武器伤害倍率</div>
       </div>
     </div>
+    <div class="face-descline" id="faceDescLine"></div>
     <div class="face-mini" id="faceMini"></div>
     <div class="face-effect" id="faceEffect"></div>
   </aside>
@@ -691,6 +726,12 @@ input[type=range]{touch-action:manipulation}
   <div class="joystick" id="joystick">
     <div class="joy-base" id="joyBase"><div class="joy-knob" id="joyKnob"></div></div>
   </div>
+
+  <button class="charge-btn" id="chargeBtn" type="button" aria-label="骰面特效充能">
+    <span class="charge-ring"></span>
+    <span class="charge-core" id="chargeCore">充</span>
+    <span class="charge-pips"><i></i><i></i></span>
+  </button>
 </div>
 
 <div class="ui-settings" id="uiSettings">
@@ -824,7 +865,11 @@ const ui = {
   topNote: document.getElementById('topNote'),
   activeEnchants: document.getElementById('activeEnchants'),
   faceMini: document.getElementById('faceMini'),
+  faceDescLine: document.getElementById('faceDescLine'),
   faceEffect: document.getElementById('faceEffect'),
+  chargeBtn: document.getElementById('chargeBtn'),
+  chargeCore: document.getElementById('chargeCore'),
+  chargePips: document.querySelectorAll('#chargeBtn .charge-pips i'),
   weaponPanel: document.getElementById('weaponPanel'),
   titleOverlay: document.getElementById('titleOverlay'),
   levelOverlay: document.getElementById('levelOverlay'),
@@ -952,7 +997,7 @@ const FACE_EFFECT_DEFS = {
   crit:      { name:'暴击', icon:'暴', color:'#ffd166', desc:'直接命中 5% 概率伤害×10' },
   chase:     { name:'追击', icon:'追', color:'#c7a4ff', desc:'每次武器开火追加一颗无限穿透大子弹' },
   knockback: { name:'击退', icon:'退', color:'#ff9b64', desc:'触发时向最近两个敌人射出击退弹' },
-  machine:   { name:'机枪', icon:'机', color:'#73e6c7', desc:'1秒：伤害1 · 间隔0.5s · 连发×10' },
+  machine:   { name:'机枪', icon:'机', color:'#73e6c7', desc:'1秒：召唤临时机枪 · 伤害=最高武器/10 · 0间隔按0.5s · 10连发' },
   explosion: { name:'爆炸', icon:'爆', color:'#ff7a70', desc:'命中爆炸：30% · 半径1.5格 · 最多10个' },
 };
 const FACE_EFFECT_ORDER = ['element','crit','chase','knockback','machine','explosion'];
@@ -1202,6 +1247,55 @@ function weaponSlotEffects(w) {
   for (const slot of w.slots) if (slot && eff[slot.type] !== undefined) eff[slot.type]++;
   return eff;
 }
+function digitsForNumber(value) {
+  return String(Math.max(0, Math.round(value))).split('').map(ch => fixedDigit(Number(ch), false));
+}
+function highestWeaponDamage() {
+  let max = 0;
+  for (const w of g.weapons) {
+    if (w.temporary) continue;
+    max = Math.max(max, fieldValue(w.damage));
+  }
+  return max;
+}
+function spawnMachineWeapon(until) {
+  if (!g) return;
+  const old = g.weapons.find(w => w.tempMachine);
+  if (old) {
+    old.expireAt = Math.max(old.expireAt || 0, until);
+    return;
+  }
+  const dmg = Math.max(0, Math.ceil(highestWeaponDamage() / 10));
+  const w = {
+    id:'temp-machine',
+    name:'机枪',
+    form:'临时',
+    color:'#73e6c7',
+    damage:digitsForNumber(dmg),
+    interval:[fixedDigit(0, true)],
+    intervalDecimal:false,
+    pellets:[fixedDigit(1, false)],
+    pierce:[fixedDigit(0, false)],
+    burst:[fixedDigit(1, true), fixedDigit(0, true)],
+    slots:[],
+    spread:.055,
+    speed:17,
+    radius:.1,
+    heavy:false,
+    desc:`临时机枪 · 伤害 ${dmg} · 0间隔按0.5s · 10连发`,
+    temporary:true,
+    tempMachine:true,
+    expireAt:until,
+    cd:0,
+    burstLeft:0,
+    burstTimer:0,
+    bursting:false,
+    jammed:false,
+    last:null,
+  };
+  g.weapons.push(w);
+  renderWeaponPanel();
+}
 function slotText(w) {
   if (!w.slots.length) return '无附魔槽';
   return w.slots.map(s => s ? ENCHANT_DEFS[s.type].short : '空').join(' / ');
@@ -1349,6 +1443,7 @@ let currentCards = [];
 let targetCard = null;
 let targetKind = null;
 let choosing = false;
+let selectedFaceDescId = null;
 let bannerTimer = 0;
 let toastTimer = 0;
 let lastWaveAt = -Infinity;
@@ -1379,6 +1474,7 @@ function createGame() {
     shake:0, flash:0, healFlash:0,
     sfxHit:0, nextId:0, cardDraws:0,
     faceEffectStates:{}, nextFaceHudAt:0,
+    faceCharge:{ stacks:0, progress:0, activeUntil:0 },
   };
   const shuffled = shuffle(FACE_EFFECT_ORDER);
   game.faces.forEach((face, i) => {
@@ -1428,6 +1524,9 @@ function bottomFaceAt(q) {
 function faceEffectState(faceId) {
   return g && g.faceEffectStates ? g.faceEffectStates[faceId] : null;
 }
+function isFaceChargeActive() {
+  return !!(g && g.faceCharge && g.faceCharge.activeUntil > g.t);
+}
 function isFaceEffectActive(type) {
   if (!g || !g.faceEffectStates) return false;
   for (const st of Object.values(g.faceEffectStates)) {
@@ -1435,15 +1534,18 @@ function isFaceEffectActive(type) {
   }
   return false;
 }
-function triggerFaceEffect(faceId) {
+function triggerFaceEffect(faceId, opts = {}) {
   const st = faceEffectState(faceId);
-  if (!st || st.activeUntil > g.t) return;
+  if (!st || st.activeUntil > g.t) return false;
+  if (!opts.force && !isFaceChargeActive()) return false;
   st.cooldown = 0;
-  st.activeUntil = g.t + 1;
+  st.activeUntil = Math.min(g.t + 1, g.faceCharge.activeUntil || g.t + 1);
   const eff = FACE_EFFECT_DEFS[st.type];
-  addText(g.player.x, g.player.y, 1.28, `面效果 · ${eff.name}`, eff.color, 1.15);
+  addText(g.player.x, g.player.y, 1.28, `面效果 · ${eff.name}`, eff.color, .82, .65);
   if (st.type === 'knockback') spawnKnockbackBullets();
+  if (st.type === 'machine') spawnMachineWeapon(st.activeUntil);
   refreshDiceHUD();
+  return true;
 }
 function onTopFaceChanged(newFaceId) {
   if (!g) return;
@@ -1454,8 +1556,61 @@ function onTopFaceChanged(newFaceId) {
     }
   }
   const st = faceEffectState(newFaceId);
-  if (st && st.cooldown >= FACE_EFFECT_COOLDOWN) triggerFaceEffect(newFaceId);
+  if (st && st.cooldown >= FACE_EFFECT_COOLDOWN && isFaceChargeActive()) triggerFaceEffect(newFaceId);
   refreshDiceHUD();
+}
+
+function activateFaceCharge() {
+  if (!g || state !== 'playing') return;
+  const c = g.faceCharge;
+  if (!c || c.activeUntil > g.t || c.stacks <= 0) return;
+  c.stacks--;
+  c.progress = 0;
+  c.activeUntil = g.t + 3;
+  triggerFaceEffect(g.player.activeFaceId, { force:true });
+  updateChargeUI();
+}
+
+function updateFaceCharge(dt) {
+  if (!g || !g.faceCharge) return;
+  const c = g.faceCharge;
+  if (c.activeUntil > g.t) {
+    updateChargeUI();
+    return;
+  }
+  if (c.activeUntil) c.activeUntil = 0;
+  if (c.stacks < 2) {
+    c.progress += dt / 2;
+    while (c.progress >= 1 && c.stacks < 2) {
+      c.progress -= 1;
+      c.stacks++;
+    }
+    if (c.stacks >= 2) c.progress = 0;
+  }
+  updateChargeUI();
+}
+
+function updateChargeUI() {
+  if (!ui.chargeBtn || !g || !g.faceCharge) return;
+  const c = g.faceCharge;
+  const active = c.activeUntil > g.t;
+  const ratio = active
+    ? clamp((c.activeUntil - g.t) / 3, 0, 1)
+    : (c.stacks >= 2 ? 1 : clamp(c.progress, 0, 1));
+  ui.chargeBtn.style.setProperty('--charge', ratio.toFixed(3));
+  ui.chargeBtn.classList.toggle('active', active);
+  ui.chargeBtn.classList.toggle('empty', !active && c.stacks === 0);
+  if (ui.chargeCore) {
+    ui.chargeCore.textContent = active
+      ? `${Math.max(0, Math.ceil(c.activeUntil - g.t))}s`
+      : (c.stacks > 0 ? String(c.stacks) : '充');
+  }
+  if (ui.chargePips) {
+    ui.chargePips.forEach((pip, i) => pip.classList.toggle('full', i < c.stacks));
+  }
+  ui.chargeBtn.setAttribute('aria-label', active
+    ? `骰面特效生效中，剩余 ${Math.max(0, c.activeUntil - g.t).toFixed(1)} 秒`
+    : `骰面特效充能，${c.stacks}/2 层`);
 }
 function enemyAtCell(x, y) {
   for (const e of g.enemies) {
@@ -2185,15 +2340,9 @@ function nearestEnemy(x, y, maxDist = 13) {
 }
 
 function normalizeFieldMin(w, fieldName) {
-  // 伤害和攻击间隔允许 0；间隔 0 会以极快速度射击，而不是卡死。
-  if (fieldName === 'damage' || fieldName === 'interval') return;
-  const field = w[fieldName];
-  if (!Array.isArray(field)) return;
-  if (fieldHasWild(field)) return;
-  if (fieldValue(field) >= 1) return;
-  const last = field[field.length - 1];
-  last.kind = 'fixed';
-  last.value = 1;
+  // 五位数字都允许为 0；具体规则在攻击时处理：
+  // 间隔 0 按 0.5s，穿透 0 按 1，散弹/连发 0 则无法攻击。
+  return;
 }
 
 function weaponVolley(w) {
@@ -2205,13 +2354,14 @@ function weaponVolley(w) {
   const faceEff = face.enchant;
   const rawDamage = fieldValue(w.damage);
   // 武器自身（含武器槽）是基数，骰面附魔是倍率：(武器 + 武器槽) × (1 + 骰面加值)。
-  const basePellets = Math.max(1, fieldValue(w.pellets) + slotEff.spread);
+  const basePellets = fieldValue(w.pellets) + slotEff.spread;
+  if (basePellets <= 0) return false;
   const pellets = Math.min(64, basePellets * (1 + faceEff.spread));
+  if (pellets <= 0) return false;
   const basePierce = Math.max(1, fieldValue(w.pierce) + slotEff.pierce);
   const hits = Math.max(1, basePierce * (1 + faceEff.pierce));
   const multiplier = face.value;
-  const machine = !!w.volleyMachine;
-  const damage = machine ? 1 : rawDamage * multiplier;
+  const damage = rawDamage * multiplier;
   const canCrit = w.volleyCrit !== undefined ? w.volleyCrit : isFaceEffectActive('crit');
   const canExplode = w.volleyExplode !== undefined ? w.volleyExplode : isFaceEffectActive('explosion');
   const elementBuff = w.volleyElement !== undefined ? w.volleyElement : isFaceEffectActive('element');
@@ -2249,20 +2399,25 @@ function weaponVolley(w) {
     spawnParticle(g.player.x, g.player.y, .62, Math.cos(a)*rand(.3,1.1), Math.sin(a)*rand(.3,1.1), rand(.1,.6), .18, w.color, .045);
   }
   w.last = {
-    damage, pellets, hits, multiplier, rawDamage, machine,
+    damage, pellets, hits, multiplier, rawDamage,
     burst:w.burstTotal || 1,
   };
   if (w.volleyChase) {
     w.volleyChase = false;
-    spawnChaseBullet(w, damage, target);
+    spawnChaseBullet(w, damage, target, {
+      elements, canCrit, canExplode, elementBuff,
+    });
   }
   if (w.heavy) sfx.heavy(); else sfx.shoot(multiplier);
   return true;
 }
 
-function spawnChaseBullet(w, damage, target) {
+function spawnChaseBullet(w, damage, target, ctx = {}) {
   if (!target || g.projectiles.length >= 720) return;
   const angle = Math.atan2(target.y - g.player.y, target.x - g.player.x);
+  const elements = ctx.elements
+    ? { ...ctx.elements }
+    : { fire:false, ice:false, lightning:false, fireStack:0, iceStack:0, lightningStack:0 };
   const pr = {
     x:g.player.x, y:g.player.y, px:g.player.x, py:g.player.y, z:.68,
     vx:Math.cos(angle) * Math.max(12, w.speed * .85),
@@ -2271,10 +2426,10 @@ function spawnChaseBullet(w, damage, target) {
     radius:.27,
     damage,
     hitsLeft:999,
-    elements:{ fire:false, ice:false, lightning:false, fireStack:0, iceStack:0, lightningStack:0 },
-    canCrit:isFaceEffectActive('crit'),
-    canExplode:isFaceEffectActive('explosion'),
-    elementBuff:false,
+    elements,
+    canCrit:ctx.canCrit !== undefined ? ctx.canCrit : isFaceEffectActive('crit'),
+    canExplode:ctx.canExplode !== undefined ? ctx.canExplode : isFaceEffectActive('explosion'),
+    elementBuff:ctx.elementBuff !== undefined ? ctx.elementBuff : isFaceEffectActive('element'),
     chase:true,
     color:'#ffe08a',
     heavy:true,
@@ -2290,10 +2445,16 @@ function beginBurst(w) {
     w.cd = .16;
     return;
   }
-  const machine = isFaceEffectActive('machine');
-  const baseBurst = Math.max(1, fieldValue(w.burst));
-  const count = Math.max(1, Math.min(machine ? 40 : 8, machine ? baseBurst * 10 : baseBurst));
-  w.volleyMachine = machine;
+  const baseBurst = fieldValue(w.burst);
+  const basePellets = fieldValue(w.pellets) + weaponSlotEffects(w).spread;
+  if (baseBurst <= 0 || basePellets <= 0) {
+    w.jammed = true;
+    w.bursting = false;
+    w.cd = .5;
+    renderWeaponPanel();
+    return;
+  }
+  const count = Math.max(1, Math.min(40, baseBurst));
   w.volleyChase = isFaceEffectActive('chase');
   w.volleyCrit = isFaceEffectActive('crit');
   w.volleyExplode = isFaceEffectActive('explosion');
@@ -2301,7 +2462,7 @@ function beginBurst(w) {
   w.bursting = true;
   w.burstLeft = count;
   w.burstTotal = count;
-  w.burstTimer = machine ? .04 : .085;
+  w.burstTimer = .085;
   // 第一轮立即打出。
   if (!weaponVolley(w)) {
     finishBurst(w);
@@ -2317,10 +2478,9 @@ function finishBurst(w) {
   w.bursting = false;
   w.burstLeft = 0;
   normalizeFieldMin(w, 'interval');
-  const interval = w.volleyMachine ? .5 : intervalValue(w);
-  w.jammed = false;
+  const interval = intervalValue(w);
+  w.jammed = fieldValue(w.pellets) + weaponSlotEffects(w).spread <= 0 || fieldValue(w.burst) <= 0;
   w.cd = interval <= 0 ? .5 : Math.max(.1, interval);
-  w.volleyMachine = false;
   w.volleyChase = false;
   w.volleyCrit = false;
   w.volleyExplode = false;
@@ -2937,16 +3097,17 @@ function spawnDust(x, y, z, count, color, speed = 1) {
     spawnParticle(x, y, z + rand(0,.3), Math.cos(a)*v, Math.sin(a)*v, rand(.3,1.4)*speed, rand(.2,.55), color, rand(.025,.055));
   }
 }
-function addText(x, y, z, text, color, s = 1) {
+function addText(x, y, z, text, color, s = 1, alpha = 1) {
   if (!g) return;
   if (g.texts.length > 46) g.texts.shift();
-  g.texts.push({ x, y, z, text, color, s, life:.8, maxLife:.8 });
+  g.texts.push({ x, y, z, text, color, s, alpha, life:.8, maxLife:.8 });
 }
 
 /* ----------------------------- 更新 ----------------------------- */
 function update(dt) {
   if (!g || state !== 'playing') return;
   g.t += dt;
+  updateFaceCharge(dt);
   if (g.t >= (g.nextFaceHudAt || 0)) {
     g.nextFaceHudAt = g.t + .1;
     refreshDiceHUD();
@@ -3008,6 +3169,9 @@ function idleAttackTarget(stillTime) {
 
 function updateWeapons(dt) {
   const rate = g.atkSpeed;
+  const before = g.weapons.length;
+  g.weapons = g.weapons.filter(w => !w.temporary || g.t < (w.expireAt || 0));
+  if (g.weapons.length !== before) renderWeaponPanel();
   for (const w of g.weapons) {
     if (w.bursting) {
       w.burstTimer -= dt * rate;
@@ -3024,7 +3188,7 @@ function updateWeapons(dt) {
   }
 }
 
-function explodeBullet(x, y, baseDamage) {
+function explodeBullet(x, y, baseDamage, ctx = {}) {
   if (baseDamage <= 0) return;
   const radius = 1.5;
   const targets = g.enemies
@@ -3036,6 +3200,7 @@ function explodeBullet(x, y, baseDamage) {
   if (!targets.length) return;
   for (const { e } of targets) {
     damageEnemy(e, baseDamage * .3, { silent:true, explosion:true });
+    if (!e.dead && ctx.elements) applyElements(e, baseDamage * .3, ctx.elements, ctx.elementBuff);
   }
   addText(x, y, .95, '爆', '#ffad78', .9);
   spawnDust(x, y, .55, 9, 'rgba(255,150,90,.62)');
@@ -3098,7 +3263,9 @@ function updateProjectiles(dt) {
         const direct = crit ? pr.damage * 10 : pr.damage;
         damageEnemy(e, direct, { crit });
         applyElements(e, pr.damage, pr.elements, pr.elementBuff);
-        if (pr.canExplode && pr.damage > 0) explodeBullet(e.x, e.y, pr.damage);
+        if (pr.canExplode && pr.damage > 0) explodeBullet(e.x, e.y, pr.damage, {
+          elements:pr.elements, elementBuff:pr.elementBuff,
+        });
         pr.hitsLeft--;
         if (pr.hitsLeft <= 0) { pr.dead = true; break; }
       }
@@ -3250,6 +3417,23 @@ function faceEffectHUD(face) {
   </div>`;
 }
 
+function faceDescText(f) {
+  const st = faceEffectState(f.id);
+  const eff = st ? FACE_EFFECT_DEFS[st.type] : null;
+  const effect = eff ? `${eff.name}：${eff.desc}` : '无面效果';
+  return `${f.name} · ×${f.value} · ${effect} · ${enchantText(f)}`;
+}
+
+function showFaceDesc(faceId) {
+  if (!g || !ui.faceDescLine) return;
+  const f = g.faces.find(v => v.id === faceId);
+  if (!f) return;
+  selectedFaceDescId = faceId;
+  ui.faceDescLine.style.setProperty('--fc', f.color);
+  ui.faceDescLine.textContent = faceDescText(f);
+  ui.faceDescLine.classList.add('show');
+}
+
 function refreshDiceHUD() {
   if (!g) return;
   const face = activeFace();
@@ -3265,13 +3449,21 @@ function refreshDiceHUD() {
     const eff = st ? FACE_EFFECT_DEFS[st.type] : null;
     const active = st && st.activeUntil > g.t;
     return `
-    <div class="face-chip ${f.id === face.id ? 'top' : ''} ${active ? 'effect-on' : ''}" style="--fc:${f.color}${eff ? `;--ec:${eff.color}` : ''}" title="${f.name} · ${enchantText(f)}${eff ? ` · ${eff.name}：${eff.desc}` : ''}">
+    <div class="face-chip ${f.id === face.id ? 'top' : ''} ${active ? 'effect-on' : ''}" data-face-id="${f.id}" style="--fc:${f.color}${eff ? `;--ec:${eff.color}` : ''}" title="${faceDescText(f)}">
       ${f.id === face.id ? '<span class="tag">顶</span>' : ''}
       ${eff ? `<span class="f-eff">${eff.icon}</span>` : ''}
       <div class="fv ${String(f.value).length > 1 ? 'multi' : ''}">${f.value}</div>
       <div class="fe">${enchantDotsHTML(f)}</div>
     </div>
   `;}).join('');
+  if (selectedFaceDescId) {
+    const selected = g.faces.find(f => f.id === selectedFaceDescId);
+    if (selected) {
+      ui.faceDescLine.style.setProperty('--fc', selected.color);
+      ui.faceDescLine.textContent = faceDescText(selected);
+      ui.faceDescLine.classList.add('show');
+    }
+  }
   ui.faceEffect.innerHTML = faceEffectHUD(face);
 }
 
@@ -3833,7 +4025,8 @@ function drawTexts() {
     const smallText = vw < 1100 && vh < 700;
     const size = Math.round((15 + t.s*7) * (smallText ? .66 : 1));
     ctx.font = `900 ${size}px "Microsoft YaHei",sans-serif`;
-    ctx.globalAlpha = clamp(alpha,0,1) * (smallText ? .72 : 1);
+    const textAlpha = t.alpha !== undefined ? t.alpha : (smallText ? .72 : 1);
+    ctx.globalAlpha = clamp(alpha,0,1) * clamp(textAlpha,0,1);
     ctx.lineWidth = smallText ? 2 : 3;
     ctx.strokeStyle = 'rgba(4,10,14,.78)';
     ctx.strokeText(t.text,p.x,p.y);
@@ -3899,6 +4092,8 @@ function resetScene(showTitle) {
   targetCard = null;
   targetKind = null;
   choosing = false;
+  selectedFaceDescId = null;
+  ui.faceDescLine.classList.remove('show');
   keys.clear();
   mobileDir = null;
   ui.levelOverlay.classList.remove('show');
@@ -3909,6 +4104,7 @@ function resetScene(showTitle) {
   refreshDiceHUD();
   renderWeaponPanel();
   updateHUD(true);
+  updateChargeUI();
   if (!showTitle) showBanner('滚起来', '顶面倍率 · 方框数字 · 附魔');
 }
 
@@ -3922,6 +4118,16 @@ ui.cards.addEventListener('click', e => {
   const btn = e.target.closest('[data-card-index]');
   if (!btn) return;
   cardClick(Number(btn.dataset.cardIndex));
+});
+ui.faceMini.addEventListener('click', e => {
+  const chip = e.target.closest('[data-face-id]');
+  if (!chip) return;
+  e.stopPropagation();
+  showFaceDesc(chip.dataset.faceId);
+});
+ui.topDigit.addEventListener('click', e => {
+  e.stopPropagation();
+  if (g) showFaceDesc(g.player.activeFaceId);
 });
 ui.skipBtn.addEventListener('click', () => {
   if (state === 'levelup') closeLevelUp();
@@ -4001,6 +4207,11 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyM') { toggleMute(); return; }
   if (e.code === 'KeyN') {
     if (state === 'playing') { e.preventDefault(); nextWave(); }
+    return;
+  }
+  if (e.code === 'KeyQ' && state === 'playing') {
+    e.preventDefault();
+    activateFaceCharge();
     return;
   }
   if (state === 'title' && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); startGame(); return; }
@@ -4310,6 +4521,14 @@ ui.muteBtn.addEventListener('click', e => {
   initAudio();
   toggleMute();
 });
+if (ui.chargeBtn) {
+  ui.chargeBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  ui.chargeBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    initAudio();
+    activateFaceCharge();
+  });
+}
 ui.nextWaveBtn.addEventListener('click', e => {
   e.stopPropagation();
   initAudio();
@@ -4367,6 +4586,7 @@ spawnInitial();
 refreshDiceHUD();
 renderWeaponPanel();
 updateHUD(true);
+updateChargeUI();
 ui.titleOverlay.classList.add('show');
 requestAnimationFrame(frame);
 
