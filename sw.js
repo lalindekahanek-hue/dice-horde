@@ -1,4 +1,4 @@
-const CACHE = 'dice-horde-v3';
+const CACHE = 'dice-horde-v4';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', event => {
@@ -20,7 +20,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache:'no-store' })
       .then(response => {
         if (response && response.ok) {
           const copy = response.clone();
